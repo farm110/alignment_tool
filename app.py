@@ -18,7 +18,11 @@ def read_file(file):
         if file.name.endswith('.csv'):
             return pd.read_csv(file)
         elif file.name.endswith(('.xlsx', '.xls')):
-            return pd.read_excel(file, engine='openpyxl')
+            # For Excel files, try to read as CSV first
+            try:
+                return pd.read_csv(file)
+            except:
+                return pd.read_excel(file)
         else:
             st.error("Unsupported file format. Please upload CSV or Excel files.")
             return None
@@ -40,13 +44,13 @@ def align_documents(template_df, input_df, key_column):
         st.error(f"Error aligning documents: {str(e)}")
         return None, None, None
 
-def save_to_excel(df, filename):
-    """Save DataFrame to Excel file"""
+def save_to_csv(df, filename):
+    """Save DataFrame to CSV file"""
     try:
-        df.to_excel(filename, index=False)
+        df.to_csv(filename, index=False)
         return True
     except Exception as e:
-        st.error(f"Error saving to Excel: {str(e)}")
+        st.error(f"Error saving file: {str(e)}")
         return False
 
 def main():
@@ -86,25 +90,28 @@ def main():
                                 if matching_rows is not None:
                                     # Save results
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    base_filename = os.path.join(output_dir, f'alignment_results_{timestamp}')
+                                    base_filename = f'alignment_results_{timestamp}'
                                     
-                                    # Save each DataFrame separately
-                                    if save_to_excel(matching_rows, f"{base_filename}_matching.xlsx"):
-                                        results_files.append(f"{base_filename}_matching.xlsx")
-                                    if save_to_excel(template_only, f"{base_filename}_template_only.xlsx"):
-                                        results_files.append(f"{base_filename}_template_only.xlsx")
-                                    if save_to_excel(input_only, f"{base_filename}_input_only.xlsx"):
-                                        results_files.append(f"{base_filename}_input_only.xlsx")
+                                    # Save each DataFrame to a separate CSV file
+                                    matching_file = os.path.join(output_dir, f'{base_filename}_matching.csv')
+                                    template_file = os.path.join(output_dir, f'{base_filename}_template_only.csv')
+                                    input_file = os.path.join(output_dir, f'{base_filename}_input_only.csv')
                                     
-                                    # Display results in tabs
-                                    tab1, tab2, tab3 = st.tabs(["Matching Rows", "Template Only", "Input Only"])
-                                    
-                                    with tab1:
-                                        st.dataframe(matching_rows)
-                                    with tab2:
-                                        st.dataframe(template_only)
-                                    with tab3:
-                                        st.dataframe(input_only)
+                                    if (save_to_csv(matching_rows, matching_file) and
+                                        save_to_csv(template_only, template_file) and
+                                        save_to_csv(input_only, input_file)):
+                                        
+                                        results_files.extend([matching_file, template_file, input_file])
+                                        
+                                        # Display results in tabs
+                                        tab1, tab2, tab3 = st.tabs(["Matching Rows", "Template Only", "Input Only"])
+                                        
+                                        with tab1:
+                                            st.dataframe(matching_rows)
+                                        with tab2:
+                                            st.dataframe(template_only)
+                                        with tab3:
+                                            st.dataframe(input_only)
                         
                         if results_files:
                             # Provide download links
@@ -116,7 +123,7 @@ def main():
                                         label=f"Download {os.path.basename(result_file)}",
                                         data=f,
                                         file_name=os.path.basename(result_file),
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                        mime="text/csv"
                                     )
 
 if __name__ == "__main__":
