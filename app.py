@@ -18,7 +18,7 @@ def read_file(file):
         if file.name.endswith('.csv'):
             return pd.read_csv(file)
         elif file.name.endswith(('.xlsx', '.xls')):
-            return pd.read_excel(file)
+            return pd.read_excel(file, engine='openpyxl')
         else:
             st.error("Unsupported file format. Please upload CSV or Excel files.")
             return None
@@ -39,6 +39,15 @@ def align_documents(template_df, input_df, key_column):
     except Exception as e:
         st.error(f"Error aligning documents: {str(e)}")
         return None, None, None
+
+def save_to_excel(df, filename):
+    """Save DataFrame to Excel file"""
+    try:
+        df.to_excel(filename, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Error saving to Excel: {str(e)}")
+        return False
 
 def main():
     st.title("Document Alignment Tool")
@@ -77,27 +86,25 @@ def main():
                                 if matching_rows is not None:
                                     # Save results
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    output_file = os.path.join(output_dir, f'alignment_results_{timestamp}.xlsx')
+                                    base_filename = os.path.join(output_dir, f'alignment_results_{timestamp}')
                                     
-                                    try:
-                                        with pd.ExcelWriter(output_file) as writer:
-                                            matching_rows.to_excel(writer, sheet_name='Matching Rows', index=False)
-                                            template_only.to_excel(writer, sheet_name='Template Only', index=False)
-                                            input_only.to_excel(writer, sheet_name='Input Only', index=False)
-                                        
-                                        results_files.append(output_file)
-                                        
-                                        # Display results in tabs
-                                        tab1, tab2, tab3 = st.tabs(["Matching Rows", "Template Only", "Input Only"])
-                                        
-                                        with tab1:
-                                            st.dataframe(matching_rows)
-                                        with tab2:
-                                            st.dataframe(template_only)
-                                        with tab3:
-                                            st.dataframe(input_only)
-                                    except Exception as e:
-                                        st.error(f"Error saving results: {str(e)}")
+                                    # Save each DataFrame separately
+                                    if save_to_excel(matching_rows, f"{base_filename}_matching.xlsx"):
+                                        results_files.append(f"{base_filename}_matching.xlsx")
+                                    if save_to_excel(template_only, f"{base_filename}_template_only.xlsx"):
+                                        results_files.append(f"{base_filename}_template_only.xlsx")
+                                    if save_to_excel(input_only, f"{base_filename}_input_only.xlsx"):
+                                        results_files.append(f"{base_filename}_input_only.xlsx")
+                                    
+                                    # Display results in tabs
+                                    tab1, tab2, tab3 = st.tabs(["Matching Rows", "Template Only", "Input Only"])
+                                    
+                                    with tab1:
+                                        st.dataframe(matching_rows)
+                                    with tab2:
+                                        st.dataframe(template_only)
+                                    with tab3:
+                                        st.dataframe(input_only)
                         
                         if results_files:
                             # Provide download links
