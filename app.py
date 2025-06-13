@@ -17,7 +17,7 @@ def read_file(file):
     if file.name.endswith('.csv'):
         return pd.read_csv(file)
     elif file.name.endswith(('.xlsx', '.xls')):
-        return pd.read_excel(file)
+        return pd.read_excel(file, engine='xlsxwriter')
     else:
         st.error("Unsupported file format. Please upload CSV or Excel files.")
         return None
@@ -70,7 +70,7 @@ def main():
                                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 output_file = os.path.join(output_dir, f'alignment_results_{timestamp}.xlsx')
                                 
-                                with pd.ExcelWriter(output_file) as writer:
+                                with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
                                     matching_rows.to_excel(writer, sheet_name='Matching Rows', index=False)
                                     template_only.to_excel(writer, sheet_name='Template Only', index=False)
                                     input_only.to_excel(writer, sheet_name='Input Only', index=False)
