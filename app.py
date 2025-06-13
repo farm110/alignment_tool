@@ -14,23 +14,31 @@ st.set_page_config(
 @st.cache_data
 def read_file(file):
     """Read CSV or Excel file and return a DataFrame"""
-    if file.name.endswith('.csv'):
-        return pd.read_csv(file)
-    elif file.name.endswith(('.xlsx', '.xls')):
-        return pd.read_excel(file, engine='xlsxwriter')
-    else:
-        st.error("Unsupported file format. Please upload CSV or Excel files.")
+    try:
+        if file.name.endswith('.csv'):
+            return pd.read_csv(file)
+        elif file.name.endswith(('.xlsx', '.xls')):
+            return pd.read_excel(file)
+        else:
+            st.error("Unsupported file format. Please upload CSV or Excel files.")
+            return None
+    except Exception as e:
+        st.error(f"Error reading file: {str(e)}")
         return None
 
 # Cache the alignment function
 @st.cache_data
 def align_documents(template_df, input_df, key_column):
     """Align documents based on the key column"""
-    merged_df = pd.merge(template_df, input_df, on=key_column, how='outer', suffixes=('_template', '_input'))
-    matching_rows = merged_df.dropna(subset=[f'{key_column}'])
-    template_only = merged_df[merged_df[f'{key_column}_input'].isna()]
-    input_only = merged_df[merged_df[f'{key_column}_template'].isna()]
-    return matching_rows, template_only, input_only
+    try:
+        merged_df = pd.merge(template_df, input_df, on=key_column, how='outer', suffixes=('_template', '_input'))
+        matching_rows = merged_df.dropna(subset=[f'{key_column}'])
+        template_only = merged_df[merged_df[f'{key_column}_input'].isna()]
+        input_only = merged_df[merged_df[f'{key_column}_template'].isna()]
+        return matching_rows, template_only, input_only
+    except Exception as e:
+        st.error(f"Error aligning documents: {str(e)}")
+        return None, None, None
 
 def main():
     st.title("Document Alignment Tool")
@@ -66,38 +74,43 @@ def main():
                                 # Align documents
                                 matching_rows, template_only, input_only = align_documents(template_df, input_df, key_column)
                                 
-                                # Save results
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                output_file = os.path.join(output_dir, f'alignment_results_{timestamp}.xlsx')
-                                
-                                with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
-                                    matching_rows.to_excel(writer, sheet_name='Matching Rows', index=False)
-                                    template_only.to_excel(writer, sheet_name='Template Only', index=False)
-                                    input_only.to_excel(writer, sheet_name='Input Only', index=False)
-                                
-                                results_files.append(output_file)
-                                
-                                # Display results in tabs
-                                tab1, tab2, tab3 = st.tabs(["Matching Rows", "Template Only", "Input Only"])
-                                
-                                with tab1:
-                                    st.dataframe(matching_rows)
-                                with tab2:
-                                    st.dataframe(template_only)
-                                with tab3:
-                                    st.dataframe(input_only)
+                                if matching_rows is not None:
+                                    # Save results
+                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    output_file = os.path.join(output_dir, f'alignment_results_{timestamp}.xlsx')
+                                    
+                                    try:
+                                        with pd.ExcelWriter(output_file) as writer:
+                                            matching_rows.to_excel(writer, sheet_name='Matching Rows', index=False)
+                                            template_only.to_excel(writer, sheet_name='Template Only', index=False)
+                                            input_only.to_excel(writer, sheet_name='Input Only', index=False)
+                                        
+                                        results_files.append(output_file)
+                                        
+                                        # Display results in tabs
+                                        tab1, tab2, tab3 = st.tabs(["Matching Rows", "Template Only", "Input Only"])
+                                        
+                                        with tab1:
+                                            st.dataframe(matching_rows)
+                                        with tab2:
+                                            st.dataframe(template_only)
+                                        with tab3:
+                                            st.dataframe(input_only)
+                                    except Exception as e:
+                                        st.error(f"Error saving results: {str(e)}")
                         
-                        # Provide download links
-                        st.success("Processing complete!")
-                        st.write("Download Results:")
-                        for result_file in results_files:
-                            with open(result_file, 'rb') as f:
-                                st.download_button(
-                                    label=f"Download {os.path.basename(result_file)}",
-                                    data=f,
-                                    file_name=os.path.basename(result_file),
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
+                        if results_files:
+                            # Provide download links
+                            st.success("Processing complete!")
+                            st.write("Download Results:")
+                            for result_file in results_files:
+                                with open(result_file, 'rb') as f:
+                                    st.download_button(
+                                        label=f"Download {os.path.basename(result_file)}",
+                                        data=f,
+                                        file_name=os.path.basename(result_file),
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
 
 if __name__ == "__main__":
     main() 
