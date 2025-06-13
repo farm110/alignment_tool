@@ -1,101 +1,62 @@
 import streamlit as st
 import pandas as pd
-import os
-from datetime import datetime
+from io import BytesIO
 
-def read_file(file):
-    """Read CSV or Excel file and return a DataFrame"""
-    if file.name.endswith('.csv'):
-        return pd.read_csv(file)
-    elif file.name.endswith(('.xlsx', '.xls')):
-        return pd.read_excel(file)
+st.set_page_config(page_title="Document Alignment Tool", layout="wide")
+
+@st.cache_data
+def load_dataframe(uploaded_file: BytesIO, sheet_name: str = None):
+    """
+    Load an Excel/CSV file into a DataFrame, cached by contents and sheet.
+    """
+    if uploaded_file.name.lower().endswith(('.xls', '.xlsx')):
+        return pd.read_excel(uploaded_file, sheet_name=sheet_name)
     else:
-        st.error("Unsupported file format. Please upload CSV or Excel files.")
-        return None
+        return pd.read_csv(uploaded_file)
 
-def align_documents(template_df, input_df, key_column):
-    """Align documents based on the key column"""
-    # Find matching rows
-    merged_df = pd.merge(template_df, input_df, on=key_column, how='outer', suffixes=('_template', '_input'))
-    
-    # Split into matching and non-matching rows
-    matching_rows = merged_df.dropna(subset=[f'{key_column}'])
-    template_only = merged_df[merged_df[f'{key_column}_input'].isna()]
-    input_only = merged_df[merged_df[f'{key_column}_template'].isna()]
-    
-    return matching_rows, template_only, input_only
+@st.cache_data
+def align_data(template_df: pd.DataFrame, input_df: pd.DataFrame, key: str):
+    """
+    Align two DataFrames on the key column. Returns matching, template-only, and input-only.
+    """
+    merged = template_df.merge(input_df, on=key, how='outer', indicator=True)
+    matching = merged[merged['_merge'] == 'both'].drop(columns=['_merge'])
+    template_only = merged[merged['_merge'] == 'left_only'].drop(columns=['_merge'])
+    input_only = merged[merged['_merge'] == 'right_only'].drop(columns=['_merge'])
+    return matching, template_only, input_only
 
-def save_results(matching_rows, template_only, input_only, output_dir):
-    """Save results to Excel file with multiple sheets"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = os.path.join(output_dir, f'alignment_results_{timestamp}.xlsx')
-    
-    with pd.ExcelWriter(output_file) as writer:
-        matching_rows.to_excel(writer, sheet_name='Matching Rows', index=False)
-        template_only.to_excel(writer, sheet_name='Template Only', index=False)
-        input_only.to_excel(writer, sheet_name='Input Only', index=False)
-    
-    return output_file
+st.title("📄 Document Alignment Tool")
 
-def main():
-    st.title("Document Alignment Tool")
-    st.write("Upload a template document and one or more input documents to align them based on a key column.")
-    
-    # Create output directory if it doesn't exist
-    output_dir = "alignment_results"
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Template file upload
-    template_file = st.file_uploader("Upload Template Document (CSV or Excel)", type=['csv', 'xlsx', 'xls'])
-    
-    if template_file:
-        template_df = read_file(template_file)
-        if template_df is not None:
-            st.write("Template Preview:")
-            st.dataframe(template_df.head())
-            
-            # Input files upload
-            input_files = st.file_uploader("Upload Input Documents (CSV or Excel)", type=['csv', 'xlsx', 'xls'], accept_multiple_files=True)
-            
-            if input_files:
-                # Key column selection
-                key_column = st.selectbox("Select Key Column for Alignment", template_df.columns)
-                
-                if st.button("Align Documents"):
-                    results_files = []
-                    
-                    for input_file in input_files:
-                        input_df = read_file(input_file)
-                        if input_df is not None:
-                            # Align documents
-                            matching_rows, template_only, input_only = align_documents(template_df, input_df, key_column)
-                            
-                            # Save results
-                            output_file = save_results(matching_rows, template_only, input_only, output_dir)
-                            results_files.append(output_file)
-                            
-                            # Display results
-                            st.write(f"Results for {input_file.name}:")
-                            
-                            st.write("Matching Rows:")
-                            st.dataframe(matching_rows)
-                            
-                            st.write("Template Only Rows:")
-                            st.dataframe(template_only)
-                            
-                            st.write("Input Only Rows:")
-                            st.dataframe(input_only)
-                    
-                    # Provide download links for all result files
-                    st.write("Download Results:")
-                    for result_file in results_files:
-                        with open(result_file, 'rb') as f:
-                            st.download_button(
-                                label=f"Download {os.path.basename(result_file)}",
-                                data=f,
-                                file_name=os.path.basename(result_file),
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
+# Sidebar: upload files
+template_file = st.sidebar.file_uploader("Upload template CSV/Excel", type=['csv', 'xls', 'xlsx'])
+input_files = st.sidebar.file_uploader("Upload input CSV/Excel", type=['csv', 'xls', 'xlsx'], accept_multiple_files=True)
+key_column = st.sidebar.text_input("Key column name for alignment")
 
-if __name__ == "__main__":
-    main() 
+if template_file and input_files and key_column:
+    template_df = load_dataframe(template_file)
+    st.sidebar.write(f"Template has {len(template_df)} rows.")
+
+    for file in input_files:
+        input_df = load_dataframe(file)
+        st.sidebar.write(f"Processing {file.name} ({len(input_df)} rows)")
+
+        # Perform alignment
+        matching, tem_only, inp_only = align_data(template_df, input_df, key_column)
+
+        st.subheader(f"Results for {file.name}")
+        st.write("**Matching rows:**", matching)
+        st.write("**Only in template:**", tem_only)
+        st.write("**Only in input:**", inp_only)
+
+        # Download results button
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            matching.to_excel(writer, sheet_name='Matching', index=False)
+            tem_only.to_excel(writer, sheet_name='Template_Only', index=False)
+            inp_only.to_excel(writer, sheet_name='Input_Only', index=False)
+        st.download_button(
+            label="Download results as Excel",
+            data=output.getvalue(),
+            file_name=f"alignment_{file.name}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
