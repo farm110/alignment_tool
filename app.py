@@ -42,6 +42,9 @@ input_files = st.sidebar.file_uploader("Upload input CSV/Excel", type=['csv', 'x
 
 if template_file:
     template_df = load_dataframe(template_file)
+    # Ensure template_df is a DataFrame
+    if isinstance(template_df, dict):
+        template_df = pd.DataFrame(template_df)
     st.sidebar.write(f"Template has {len(template_df)} rows.")
     
     # Create select box for key column based on template columns
