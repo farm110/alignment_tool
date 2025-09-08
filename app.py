@@ -3,11 +3,13 @@ import pandas as pd
 from io import BytesIO
 from typing import Tuple, List
 
-def load_excel_or_csv(file: BytesIO) -> pd.DataFrame:
-    """Load data from Excel or CSV file into a DataFrame."""
+def load_excel_tsv_or_csv(file: BytesIO) -> pd.DataFrame:
+    """Load data from Excel TSV or CSV file into a DataFrame."""
     try:
         if file.name.lower().endswith(('.xls', '.xlsx')):
             return pd.read_excel(file)
+        elif file.name.lower().endswith(('.tsv', '.txt')):
+            return pd.read_csv(file, sep= '\t')
         return pd.read_csv(file)
     except Exception as e:
         st.error(f"Error loading file {file.name}: {str(e)}")
@@ -57,15 +59,15 @@ def main():
     # File upload section
     st.sidebar.header("Upload Files")
     template_file = st.sidebar.file_uploader(
-        "Upload template file (Excel/CSV)",
-        type=['xlsx', 'xls', 'csv'],
+        "Upload template file (Excel/TSV/CSV/txt)",
+        type=['xlsx', 'xls', 'csv', 'tsv','txt'],
         help="Upload your template file first"
     )
 
     # Process template file
     template_df = None
     if template_file:
-        template_df = load_excel_or_csv(template_file)
+        template_df = load_excel_tsv_or_csv(template_file)
         if template_df is not None:
             st.sidebar.success(f"Template loaded: {len(template_df)} rows")
             
@@ -78,19 +80,19 @@ def main():
 
             # Input file upload
             input_files = st.sidebar.file_uploader(
-                "Upload input files (Excel/CSV)",
-                type=['xlsx', 'xls', 'csv'],
+                "Upload input files (Excel/TSV/CSV/txt)",
+                type=['xlsx', 'xls', 'csv','tsv','txt'],
                 accept_multiple_files=True,
                 help="Upload one or more files to compare with the template"
             )
 
             # Process input files
             if input_files:
-                for input_file in input_files:
+                for i, input_file in enumerate(input_files):
                     st.subheader(f"Processing {input_file.name}")
                     
                     # Load input file
-                    input_df = load_excel_or_csv(input_file)
+                    input_df = load_excel_tsv_or_csv(input_file)
                     if input_df is None:
                         continue
 
@@ -118,7 +120,8 @@ def main():
                             label="Download results as Excel",
                             data=output.getvalue(),
                             file_name=f"alignment_{input_file.name}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key = f'download{i}'
                         )
 
 if __name__ == "__main__":
