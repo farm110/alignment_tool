@@ -38,7 +38,7 @@ streamlit run app.py
 ----Download the results
 
 ## Example
-![Program Screenshot](images/screenshot.png)
+![Program Screenshot](images/screenshot.jpeg)
 
 ## Known issues
 ----If your excel file have multiple sheets, it only works on the first one
